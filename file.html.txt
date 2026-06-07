@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Klassenmarathon</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="[unpkg.com](https://unpkg.com/leaflet@1.9.4/dist/leaflet.css)"/>
+  <!-- Leaflet Routing -->
+  <link rel="stylesheet" href="[unpkg.com](https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css)"/>
+
+  <style>
+    :root {
+      --primary: #e8431a;
+      --secondary: #1a73e8;
+      --accent: #34a853;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #1e1e2e;
+      --muted: #6b7280;
+      --radius: 14px;
+      --shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, #c1300f 100%);
+      color: #fff;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 12px rgba(232,67,26,0.3);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 2rem; }
+    .header-title h1 { font-size: 1.4rem; font-weight: 800; line-height: 1.2; }
+    .header-title p  { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+    #btn-login {
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.6);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 700;
+      transition: background 0.2s;
+    }
+    #btn-login:hover { background: rgba(255,255,255,0.35); }
+
+    /* ── LAYOUT ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── MAP ── */
+    #map {
+      height: 460px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    @media (max-width: 900px) { #map { height: 320px; } }
+
+    /* ── PROGRESS ── */
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 10px;
+    }
+    .progress-km { font-size: 2rem; font-weight: 900; color: var(--primary); line-height: 1; }
+    .progress-km span { font-size: 1rem; font-weight: 500; color: var(--muted); }
+    .progress-pct { font-size: 1rem; font-weight: 700; color: var(--accent); }
+    .progress-bar-wrap {
+      background: #e9ecef;
+      border-radius: 50px;
+      height: 18px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 50px;
+      background: linear-gradient(90deg, var(--primary), #f97316);
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+      min-width: 4px;
+    }
+    .progress-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    /* ── STATS ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .stat-box {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-box .val { font-size: 1.4rem; font-weight: 800; color: var(--secondary); }
+    .stat-box .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── LOG ── */
+    .log-list { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+    .log-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border-radius: 10px;
+      border-left: 4px solid var(--primary);
+    }
+    .log-emoji { font-size: 1.4rem; flex-shrink: 0; }
+    .log-info { flex: 1; }
+    .log-info strong { font-size: 0.9rem; display: block; }
+    .log-info small { color: var(--muted); font-size: 0.75rem; }
+    .log-km { font-weight: 800; color: var(--primary); font-size: 0.95rem; white-space: nowrap; }
+
+    /* ── MILESTONES ── */
+    .milestone-list { display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; }
+    .milestone-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--bg);
+      font-size: 0.88rem;
+    }
+    .milestone-item.reached { background: #d1fae5; }
+    .milestone-item .m-emoji { font-size: 1.3rem; }
+    .milestone-item .m-info { flex: 1; }
+    .milestone-item .m-km { font-weight: 700; color: var(--muted); font-size: 0.8rem; }
+    .milestone-badge {
+      font-size: 0.7rem;
+      background: var(--accent);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 50px;
+      font-weight: 700;
+    }
+
+    /* ── ADMIN PANEL ── */
+    #admin-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #admin-panel.open { display: flex; }
+    .admin-box {
+      background: #fff;
+      border-radius: 20px;
+      padding: 28px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .admin-box h2 { font-size: 1.2rem; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: 50px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(232,67,26,0.35); }
+    .btn-primary:hover { box-shadow: 0 6px 20px rgba(232,67,26,0.45); }
+    .btn-secondary { background: var(--bg); color: var(--text); }
+    .btn-danger { background: #fee2e2; color: #b91c1c; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    .admin-section { border-top: 1px solid #e5e7eb; margin-top: 20px; padding-top: 20px; }
+    .admin-section h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; }
+    .milestone-edit-item {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+    }
+    .milestone-edit-item input { flex: 1; }
+    .milestone-edit-item input.emoji-input { width: 60px; flex: none; text-align: center; }
+
+    /* ── LOGIN MODAL ── */
+    #login-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 9998;
+      align-items: center;
+      justify-content: center;
+    }
+    #login-modal.open { display: flex; }
+    .login-box {
+      background: #fff;
+      border-radius: 20px;
+      padding: 32px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .login-box .lock { font-size: 2.5rem; margin-bottom: 12px; }
+    .login-box h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: 20px; }
+    .login-box input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      outline: none;
+    }
+    .login-box input:focus { border-color: var(--primary); }
+    #login-error { color: #b91c1c; font-size: 0.82rem; margin-top: -6px; margin-bottom: 10px; display: none; }
+
+    /* ── CELEBRATION ── */
+    #celebration {
+      display: none;
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+    }
+    #celebration.show { display: flex; }
+    .celeb-box {
+      background: #fff;
+      border-radius: 24px;
+      padding: 36px 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      animation: popIn 0.4s cubic-bezier(.175,.885,.32,1.275) forwards;
+      pointer-events: all;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+    .celeb-emoji { font-size: 4rem; display: block; margin-bottom: 10px; }
+    .celeb-box h2 { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
+    .celeb-box p  { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1e1e2e;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      z-index: 99998;
+      transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    .section-gap { margin-top: 16px; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="logo">🏃</div>
+    <div class="header-title">
+      <h1 id="app-title">Klassenmarathon</h1>
+      <p id="app-subtitle">Von … nach …</p>
+    </div>
+  </div>
+  <button id="btn-login">🔐 Lehrkraft</button>
+</header>
+
+<!-- MAIN -->
+<div class="main-grid">
+
+  <!-- LEFT COLUMN -->
+  <div>
+    <div id="map"></div>
+
+    <!-- PROGRESS -->
+    <div class="card section-gap">
+      <div class="card-title">📍 Unser Fortschritt</div>
+      <div class="progress-header">
+        <div>
+          <div class="progress-km"><span id="km-done">0</span> <span>km geschafft</span></div>
+          <div style="font-size:0.82rem;color:var(--muted);margin-top:4px">von <strong id="km-total">–</strong> km Gesamtstrecke</div>
+        </div>
+        <div class="progress-pct" id="pct-display">0 %</div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+      </div>
+      <div class="progress-sub" id="km-remaining">– km noch vor uns 💪</div>
+    </div>
+
+    <!-- STATS -->
+    <div class="card section-gap">
+      <div class="card-title">📊 Statistik</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="val" id="stat-entries">0</div>
+          <div class="lbl">Trainingseinheiten</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-avg">0</div>
+          <div class="lbl">Ø km pro Einheit</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-avg-week">0</div>
+          <div class="lbl">Ø km pro Woche</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="stat-best">0</div>
+          <div class="lbl">Beste Einheit (km)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- MILESTONES -->
+    <div class="card">
+      <div class="card-title">🏁 Meilensteine</div>
+      <div class="milestone-list" id="milestone-list">
+        <div style="color:var(--muted);font-size:0.85rem;">Noch keine Route gesetzt.</div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="card">
+      <div class="card-title">📋 Eintrags-Log</div>
+      <ul class="log-list" id="log-list">
+        <li style="color:var(--muted);font-size:0.85rem;padding:8px 0;">Noch keine Einträge.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div id="login-modal">
+  <div class="login-box">
+    <div class="lock">🔐</div>
+    <h2>Lehrkraft-Login</h2>
+    <input type="password" id="pw-input" placeholder="Passwort eingeben" />
+    <div id="login-error">Falsches Passwort. Nochmal versuchen.</div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="checkLogin()">Einloggen</button>
+    <button class="btn btn-secondary" style="width:100%;justify-content:center;margin-top:8px;" onclick="closeModal('login-modal')">Abbrechen</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel">
+  <div class="admin-box">
+    <h2>⚙️ Verwaltung</h2>
+
+    <div class="form-group">
+      <label>App-Titel</label>
+      <input type="text" id="inp-title" placeholder="z.B. Klassenmarathon" />
+    </div>
+    <div class="form-group">
+      <label>Startort</label>
+      <input type="text" id="inp-start" placeholder="z.B. Fritz-Gietzelt-Schule Leipzig" />
+    </div>
+    <div class="form-group">
+      <label>Zielort</label>
+      <input type="text" id="inp-end" placeholder="z.B. Berlin" />
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="applyRoute()">🗺️ Route berechnen</button>
+    </div>
+
+    <!-- ADD ENTRY -->
+    <div class="admin-section">
+      <h3>➕ Kilometer eintragen</h3>
+      <div class="form-group">
+        <label>Name / Gruppe</label>
+        <input type="text" id="inp-name" placeholder="z.B. Montag-Gruppe" />
+      </div>
+      <div class="form-group">
+        <label>Kilometer</label>
+        <input type="number" id="inp-km" min="0.1" step="0.1" placeholder="z.B. 3.5" />
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addEntry()">✅ Eintragen</button>
+      </div>
+    </div>
+
+    <!-- MILESTONES EDIT -->
+    <div class="admin-section">
+      <h3>🏁 Meilensteine bearbeiten</h3>
+      <div id="milestone-edit-list"></div>
+      <button class="btn btn-secondary" style="margin-top:8px;" onclick="saveMilestones()">💾 Meilensteine speichern</button>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="admin-section">
+      <h3>⚠️ Passwort ändern</h3>
+      <div class="form-group">
+        <input type="password" id="inp-new-pw" placeholder="Neues Passwort" />
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" onclick="changePassword()">🔑 Passwort ändern</button>
+        <button class="btn btn-secondary" onclick="closeModal('admin-panel')">✖ Schließen</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CELEBRATION -->
+<div id="celebration">
+  <div class="celeb-box">
+    <span class="celeb-emoji" id="celeb-emoji">🎉</span>
+    <h2 id="celeb-title">Super gemacht!</h2>
+    <p id="celeb-msg">Weiter so – ihr schafft das!</p>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="closeCeleb()">💪 Weiter!</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js)";
+  import { getDatabase, ref, onValue, set, push, update, remove }
+    from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js)";
+
+  // ─────────────────────────────────────────────
+  //  🔧 FIREBASE CONFIG — hier deine Werte eintragen
+  // ─────────────────────────────────────────────
+  const firebaseConfig = {
+    apiKey:            "DEIN_API_KEY",
+    authDomain:        "DEIN_PROJECT.firebaseapp.com",
+    databaseURL:       "[dein_project-default-rtdb.europe-west1.firebasedatabase.app](https://DEIN_PROJECT-default-rtdb.europe-west1.firebasedatabase.app)",
+    projectId:         "DEIN_PROJECT",
+    storageBucket:     "DEIN_PROJECT.appspot.com",
+    messagingSenderId: "DEINE_SENDER_ID",
+    appId:             "DEINE_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+
+  // ─────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────
+  let state = {
+    title:      "Klassenmarathon",
+    startName:  "Fritz-Gietzelt-Schule Leipzig",
+    endName:    "Berlin",
+    totalKm:    0,
+    doneKm:     0,
+    entries:    [],   // {id, name, km, date}
+    milestones: [],   // {km, emoji, label}
+    password:   "schule2024"
+  };
+
+  let loggedIn       = false;
+  let map            = null;
+  let routeLayer     = null;
+  let progressLayer  = null;
+  let routeCoords    = [];   // full route LatLng array
+  let markerLayer    = null;
+
+  // ─────────────────────────────────────────────
+  //  FIREBASE LISTENERS
+  // ─────────────────────────────────────────────
+  function listenFirebase() {
+    onValue(ref(db, "app"), snap => {
+      const d = snap.val();
+      if (!d) return;
+      if (d.title)      state.title      = d.title;
+      if (d.startName)  state.startName  = d.startName;
+      if (d.endName)    state.endName    = d.endName;
+      if (d.totalKm)    state.totalKm    = d.totalKm;
+      if (d.password)   state.password   = d.password;
+      if (d.entries)    state.entries    = Object.entries(d.entries).map(([id,v])=>({id,...v}));
+      else              state.entries    = [];
+      if (d.milestones) state.milestones = Object.entries(d.milestones).map(([id,v])=>({id,...v}));
+      else              state.milestones = [];
+      if (d.routeCoords) routeCoords     = d.routeCoords;
+
+      state.doneKm = state.entries.reduce((s,e)=>s+parseFloat(e.km||0),0);
+
+      renderAll();
+      if (routeCoords.length) drawStoredRoute();
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  //  MAP INIT
+  // ─────────────────────────────────────────────
+  window.mapReady = false;
+  function initMap() {
+    map = L.map('map').setView([51.5, 12.5], 7);
+    L.tileLayer('[{s}.tile.openstreetmap.org](https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png)', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(map);
+    window.mapReady = true;
+    if (routeCoords.length) drawStoredRoute();
+  }
+
+  // ─────────────────────────────────────────────
+  //  GEOCODE (Nominatim)
+  // ─────────────────────────────────────────────
+  async function geocode(query) {
+    const url = `[nominatim.openstreetmap.org](https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1)`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'de' } });
+    const data = await res.json();
+    if (!data.length) throw new Error("Ort nicht gefunden: " + query);
+    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  }
+
+  // ─────────────────────────────────────────────
+  //  ROUTE (OSRM)
+  // ─────────────────────────────────────────────
+  async function fetchRoute(startLatLng, endLatLng) {
+    const url = `[router.project-osrm.org](https://router.project-osrm.org/route/v1/foot/${startLatLng)[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!data.routes || !data.routes.length) throw new Error("Route nicht berechnet.");
+    const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+    const distKm = Math.round(data.routes[0].distance / 1000);
+    return { coords, distKm };
+  }
+
+  // ─────────────────────────────────────────────
+  //  AUTO MILESTONES
+  // ─────────────────────────────────────────────
+  const MILESTONE_EMOJIS = ["🏃","🌆","🏛️","🌳","⛪","🗺️","🏅","🌉","🎯","🏆"];
+  async function buildMilestones(startName, endName, totalKm) {
+    // Waypoints along route via Nominatim reverse at interpolated coords
+    const milestones = [];
+    const steps = Math.floor(totalKm / 50);
+    for (let i = 1; i <= steps; i++) {
+      const kmMark = i * 50;
+      if (kmMark >= totalKm) break;
+      // interpolate coord along route
+      const coord = interpolateRoute(routeCoords, kmMark, totalKm);
+      let label = `Kilometer ${kmMark}`;
+      try {
+        const r = await fetch(`[nominatim.openstreetmap.org](https://nominatim.openstreetmap.org/reverse?format=json&lat=${coord)[0]}&lon=${coord[1]}&zoom=10&accept-language=de`);
+        const d = await r.json();
+        label = d.address?.city || d.address?.town || d.address?.village || d.address?.county || label;
+      } catch(e) {}
+      milestones.push({
+        km: kmMark,
+        emoji: MILESTONE_EMOJIS[i % MILESTONE_EMOJIS.length],
+        label
+      });
+    }
+    // Final milestone = Ziel
+    milestones.push({ km: totalKm, emoji: "🏆", label: endName });
+    return milestones;
+  }
+
+  function interpolateRoute(coords, kmTarget, totalKm) {
+    if (!coords.length) return [51.5, 12.5];
+    const idx = Math.floor((kmTarget / totalKm) * (coords.length - 1));
+    return coords[Math.min(idx, coords.length - 1)];
+  }
+
+  // ─────────────────────────────────────────────
+  //  APPLY ROUTE (admin action)
+  // ─────────────────────────────────────────────
+  window.applyRoute = async function() {
+    const startName = document.getElementById('inp-start').value.trim();
+    const endName   = document.getElementById('inp-end').value.trim();
+    const title     = document.getElementById('inp-title').value.trim() || "Klassenmarathon";
+    if (!startName || !endName) { showToast("Bitte Start und Ziel eingeben."); return; }
+
+    showToast("⏳ Route wird berechnet…");
+    try {
+      const [sCoord, eCoord] = await Promise.all([geocode(startName), geocode(endName)]);
+      const { coords, distKm } = await fetchRoute(sCoord, eCoord);
+      routeCoords = coords;
+
+      showToast("📍 Meilensteine werden gesetzt…");
+      const milestones = await buildMilestones(startName, endName, distKm);
+
+      const milestonesObj = {};
+      milestones.forEach((m, i) => { milestonesObj[`m${i}`] = m; });
+
+      await update(ref(db, "app"), {
+        title, startName, endName,
+        totalKm: distKm,
+        routeCoords: coords,
+        milestones: milestonesObj
+      });
+      showToast(`✅ Route gesetzt: ${distKm} km`);
+      renderMilestoneEditor();
+    } catch(e) {
+      showToast("❌ Fehler: " + e.message);
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  //  DRAW ROUTE ON MAP
+  // ─────────────────────────────────────────────
+  function drawStoredRoute() {
+    if (!window.mapReady || !routeCoords.length) return;
+
+    if (routeLayer)    { map.removeLayer(routeLayer);    routeLayer    = null; }
+    if (progressLayer) { map.removeLayer(progressLayer); progressLayer = null; }
+    if (markerLayer)   { map.removeLayer(markerLayer);   markerLayer   = null; }
+
+    // Full route (grey)
+    routeLayer = L.polyline(routeCoords, { color: '#d1d5db', weight: 5, opacity: 0.7 }).addTo(map);
+
+    // Progress route (red/orange)
+    const doneRatio = state.totalKm > 0 ? state.doneKm / state.totalKm : 0;
+    const doneIdx   = Math.min(Math.floor(doneRatio * routeCoords.length), routeCoords.length - 1);
+    if (doneIdx > 0) {
+      progressLayer = L.polyline(routeCoords.slice(0, doneIdx + 1), {
+        color: '#e8431a', weight: 6, opacity: 0.95
+      }).addTo(map);
+    }
+
+    // Markers
+    markerLayer = L.layerGroup().addTo(map);
+
+    // Start marker
+    const startIcon = L.divIcon({ html: '🏫', className: '', iconSize: [28,28], iconAnchor: [14,14] });
+    L.marker(routeCoords[0], { icon: startIcon })
+      .bindPopup(`<b>🏫 Start</b><br>${state.startName}`)
+      .addTo(markerLayer);
+
+    // End marker
+    const endIcon = L.divIcon({ html: '🏆', className: '', iconSize: [28,28], iconAnchor: [14,14] });
+    L.marker(routeCoords[routeCoords.length - 1], { icon: endIcon })
+      .bindPopup(`<b>🏆 Ziel</b><br>${state.endName}<br>${state.totalKm} km`)
+      .addTo(markerLayer);
+
+    // Progress dot
+    if (doneIdx > 0) {
+      const posIcon = L.divIcon({ html: '🏃', className: '', iconSize: [28,28], iconAnchor: [14,14] });
+      L.marker(routeCoords[doneIdx], { icon: posIcon })
+        .bindPopup(`<b>📍 Aktueller Stand</b><br>${state.doneKm.toFixed(1)} km gelaufen`)
+        .addTo(markerLayer);
+    }
+
+    // Milestone markers
+    state.milestones.forEach(m => {
+      const coord = interpolateRoute(routeCoords, m.km, state.totalKm);
+      const reached = state.doneKm >= m.km;
+      const mIcon = L.divIcon({
+        html: `<div style="font-size:1.4rem;filter:${reached?'none':'grayscale(1) opacity(0.5)'}">${m.emoji}</div>`,
+        className: '', iconSize: [28,28], iconAnchor: [14,14]
+      });
+      L.marker(coord, { icon: mIcon })
+        .bindPopup(`<b>${m.emoji} ${m.label}</b><br>km ${m.km}${reached?' ✅ Erreicht!':''}`)
+        .addTo(markerLayer);
+    });
+
+    map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+  }
+
+  // ─────────────────────────────────────────────
+  //  ADD ENTRY
+  // ─────────────────────────────────────────────
+  window.addEntry = async function() {
+    const name = document.getElementById('inp-name').value.trim();
+    const km   = parseFloat(document.getElementById('inp-km').value);
+    if (!name)      { showToast("Bitte einen Namen eingeben."); return; }
+    if (!km || km <= 0) { showToast("Bitte gültige Kilometer eingeben."); return; }
+
+    const entry = {
+      name,
+      km,
+      date: new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' })
+    };
+    try {
+      await push(ref(db, "app/entries"), entry);
+      document.getElementById('inp-name').value = '';
+      document.getElementById('inp-km').value   = '';
+      showCelebration(km);
+    } catch(e) { showToast("❌ Fehler beim Speichern."); }
+  };
+
+  // ─────────────────────────────────────────────
+  //  MILESTONES EDITOR
+  // ─────────────────────────────────────────────
+  function renderMilestoneEditor() {
+    const el = document.getElementById('milestone-edit-list');
+    el.innerHTML = '';
+    state.milestones.forEach((m, i) => {
+      el.innerHTML += `
+        <div class="milestone-edit-item">
+          <input class="emoji-input" type="text" value="${m.emoji}" id="me-emoji-${i}" />
+          <input type="text" value="${m.label}" id="me-label-${i}" />
+          <input type="number" value="${m.km}" id="me-km-${i}" style="width:70px;flex:none;" />
+        </div>`;
+    });
+  }
+
+  window.saveMilestones = async function() {
+    const updated = {};
+    state.milestones.forEach((m, i) => {
+      updated[m.id || `m${i}`] = {
+        emoji: document.getElementById(`me-emoji-${i}`)?.value || m.emoji,
+        label: document.getElementById(`me-label-${i}`)?.value || m.label,
+        km:    parseFloat(document.getElementById(`me-km-${i}`)?.value) || m.km,
+      };
+    });
+    await set(ref(db, "app/milestones"), updated);
+    showToast("✅ Meilensteine gespeichert!");
+  };
+
+  // ─────────────────────────────────────────────
+  //  RENDER ALL UI
+  // ─────────────────────────────────────────────
+  function renderAll() {
+    // Title
+    document.getElementById('app-title').textContent    = state.title || "Klassenmarathon";
+    document.getElementById('app-subtitle').textContent =
+      (state.startName && state.endName) ? `Von ${state.startName} nach ${state.endName}` : "Von … nach …";
+    document.title = state.title || "Klassenmarathon";
+
+    // Progress
+    const done  = parseFloat(state.doneKm.toFixed(1));
+    const total = state.totalKm || 0;
+    const pct   = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    document.getElementById('km-done').textContent    = done;
+    document.getElementById('km-total').textContent   = total || "–";
+    document.getElementById('pct-display').textContent = pct + " %";
+    document.getElementById('progress-bar').style.width = pct + "%";
+    document.getElementById('km-remaining').textContent =
+      total > 0 ? `Noch ${Math.max(0, total - done).toFixed(1)} km vor euch 💪` : "– km noch vor euch 💪";
+
+    // Stats
+    const entries = state.entries || [];
+    const kms     = entries.map(e => parseFloat(e.km || 0));
+    const avgKm   = kms.length ? (kms.reduce((a,b)=>a+b,0) / kms.length).toFixed(1) : 0;
+    const best    = kms.length ? Math.max(...kms).toFixed(1) : 0;
+
+    // Avg per week
+    let avgWeek = 0;
+    if (entries.length >= 2) {
+      const dates = entries
+        .map(e => { const [d,m,y] = (e.date||'').split('.'); return new Date(`${y}-${m}-${d}`); })
+        .filter(d => !isNaN(d))
+        .sort((a,b)=>a-b);
+      if (dates.length >= 2) {
+        const weeks = Math.max(1, (dates[dates.length-1] - dates[0]) / (1000*60*60*24*7));
+        avgWeek = (done / weeks).toFixed(1);
+      }
+    }
+
+    document.getElementById('stat-entries').textContent  = entries.length;
+    document.getElementById('stat-avg').textContent      = avgKm;
+    document.getElementById('stat-avg-week').textContent = avgWeek;
+    document.getElementById('stat-best').textContent     = best;
+
+    // Log
+    const logEl = document.getElementById('log-list');
+    if (!entries.length) {
+      logEl.innerHTML = '<li style="color:var(--muted);font-size:0.85rem;padding:8px 0;">Noch keine Einträge.</li>';
+    } else {
+      logEl.innerHTML = [...entries].reverse().map(e => `
+        <li class="log-item">
+          <div class="log-emoji">🏅</div>
+          <div class="log-info">
+            <strong>${e.name}</strong>
+            <small>${e.date}</small>
+          </div>
+          <div class="log-km">${parseFloat(e.km).toFixed(1)} km</div>
+        </li>`).join('');
+    }
+
+    // Milestones list
+    const msEl = document.getElementById('milestone-list');
+    if (!state.milestones.length) {
+      msEl.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">Noch keine Route gesetzt.</div>';
+    } else {
+      msEl.innerHTML = state.milestones.map(m => {
+        const reached = state.doneKm >= m.km;
+        return `<div class="milestone-item ${reached ? 'reached' : ''}">
+          <div class="m-emoji">${m.emoji}</div>
+          <div class="m-info">
+            <strong>${m.label}</strong>
+            <div class="m-km">km ${m.km}</div>
+          </div>
+          ${reached ? '<span class="milestone-badge">✅ Erreicht</span>' : ''}
+        </div>`;
+      }).join('');
+    }
+
+    // Redraw map
+    if (window.mapReady && routeCoords.length) drawStoredRoute();
+  }
+
+  // ─────────────────────────────────────────────
+  //  CELEBRATION
+  // ─────────────────────────────────────────────
+  const CELEBRATIONS = [
+    { emoji: "👟", title: "Klasse Leistung!", msg: "Ihr gebt alles – so macht man das!" },
+    { emoji: "🔥", title: "Auf Feuer!", msg: "Diese Kilometer brennen sich in die Geschichte ein!" },
+    { emoji: "💪", title: "Stark!", msg: "Jeder Schritt bringt euch näher ans Ziel!" },
+    { emoji: "🚀", title: "Abgehängt!", msg: "Ihr seid nicht aufzuhalten!" },
+    { emoji: "⭐", title: "Superstar!", msg: "Weiter so – das Ziel kommt näher!" },
+    { emoji: "🎯", title: "Volltreffer!", msg: "Genau so! Weiter auf Kurs!" },
+    { emoji: "🏅", title: "Medaillenwürdig!", msg: "Ihr verdient euch jeden Kilometer!" },
+  ];
+
+  window.showCelebration = function(km) {
+    const c = CELEBRATIONS[Math.floor(Math.random() * CELEBRATIONS.length)];
+    document.getElementById('celeb-emoji').textContent   = c.emoji;
+    document.getElementById('celeb-title').textContent   = c.title;
+    document.getElementById('celeb-msg').textContent     = `+${km} km – ${c.msg}`;
+    document.getElementById('celebration').classList.add('show');
+  };
+  window.closeCeleb = function() {
+    document.getElementById('celebration').classList.remove('show');
+  };
+
+  // ─────────────────────────────────────────────
+  //  LOGIN
+  // ─────────────────────────────────────────────
+  document.getElementById('btn-login').addEventListener('click', () => {
+    if (loggedIn) {
+      openAdmin();
+    } else {
+      document.getElementById('pw-input').value = '';
+      document.getElementById('login-error').style.display = 'none';
+      document.getElementById('login-modal').classList.add('open');
+    }
+  });
+
+  window.checkLogin = function() {
+    const pw = document.getElementById('pw-input').value;
+    if (pw === state.password) {
+      loggedIn = true;
+      document.getElementById('login-modal').classList.remove('open');
+      document.getElementById('btn-login').textContent = '⚙️ Verwaltung';
+      openAdmin();
+    } else {
+      document.getElementById('login-error').style.display = 'block';
+    }
+  };
+
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.checkLogin();
+  });
+
+  window.changePassword = async function() {
+    const pw = document.getElementById('inp-new-pw').value.trim();
+    if (pw.length < 4) { showToast("Passwort muss mind. 4 Zeichen haben."); return; }
+    await update(ref(db, "app"), { password: pw });
+    document.getElementById('inp-new-pw').value = '';
+    showToast("✅ Passwort geändert!");
+  };
+
+  // ─────────────────────────────────────────────
+  //  ADMIN OPEN/CLOSE
+  // ─────────────────────────────────────────────
+  function openAdmin() {
+    document.getElementById('inp-title').value = state.title;
+    document.getElementById('inp-start').value = state.startName;
+    document.getElementById('inp-end').value   = state.endName;
+    renderMilestoneEditor();
+    document.getElementById('admin-panel').classList.add('open');
+  }
+
+  window.closeModal = function(id) {
+    document.getElementById(id).classList.remove('open');
+  };
+
+  // Close admin on backdrop click
+  document.getElementById('admin-panel').addEventListener('click', e => {
+    if (e.target === document.getElementById('admin-panel')) closeModal('admin-panel');
+  });
+
+  // ─────────────────────────────────────────────
+  //  TOAST
+  // ─────────────────────────────────────────────
+  window.showToast = function(msg, duration = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+  };
+
+  // ─────────────────────────────────────────────
+  //  LEAFLET LOAD + BOOT
+  // ─────────────────────────────────────────────
+  function loadScript(src, cb) {
+    const s = document.createElement('script');
+    s.src = src; s.onload = cb;
+    document.head.appendChild(s);
+  }
+
+  loadScript("[unpkg.com](https://unpkg.com/leaflet@1.9.4/dist/leaflet.js)", () => {
+    initMap();
+    listenFirebase();
+  });
+
+</script>
+</body>
+</html>
